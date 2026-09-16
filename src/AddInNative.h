@@ -44,10 +44,23 @@ private:
     IMemoryManager* m_pMemory;
     std::unique_ptr<TIJPrinter> m_printer;
 
-    void SetWString(tVariant* pVar, const std::wstring& wstr);
-    std::wstring GetWString(tVariant* pVar);
-    std::string  WStr2Str(const std::wstring& w);
-    std::wstring Str2WStr(const std::string& s);
+    /*
+     * Выделяет строку памятью платформы (IMemoryManager::AllocMemory) и копирует
+     * в неё wstr. Освобождать память должна платформа, поэтому использовать new
+     * или malloc здесь нельзя.
+     */
+    bool AllocWString(WCHAR_T** ppOut, const std::wstring& wstr);
+
+    bool SetWString(tVariant* pVar, const std::wstring& wstr);
+
+    static std::wstring GetWString(const tVariant* pVar);
+
+    /* Числовой параметр: платформа может передать его любым числовым типом. */
+    static long GetInt(const tVariant* pVar);
+
+    /* Строки протокола принтера — байтовые, во встроенном языке — UTF-16. */
+    static std::string  ToUtf8(const std::wstring& w);
+    static std::wstring FromUtf8(const std::string& s);
 
     enum eMethods {
         eConnect = 0,
