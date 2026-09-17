@@ -3,8 +3,8 @@
     Упаковка внешней компоненты в ZIP для загрузки в конфигурацию 1С (макет).
 
     Скрипт собирает найденные варианты DLL в каталог pkg, копирует MANIFEST.XML
-    и убирает из манифеста те записи component, файлов для которых нет в пакете —
-    чтобы атрибут path всегда соответствовал содержимому архива.
+    и INFO.XML и убирает из манифеста те записи component, файлов для которых
+    нет в пакете — чтобы атрибут path всегда соответствовал содержимому архива.
 
     Примеры:
         powershell -File tools\pack.ps1
@@ -28,8 +28,10 @@ $root     = (Resolve-Path $Root).Path
 $pkg      = Join-Path $root 'pkg'
 $zip      = Join-Path $root 'TIJPrinter1C.zip'
 $manifest = Join-Path $root 'MANIFEST.XML'
+$info     = Join-Path $root 'INFO.XML'
 
 if (-not (Test-Path $manifest)) { throw "Не найден MANIFEST.XML: $manifest" }
+if (-not (Test-Path $info))     { throw "Не найден INFO.XML: $info" }
 
 if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
 New-Item -ItemType Directory -Path $pkg | Out-Null
@@ -71,6 +73,11 @@ if (-not ($lines | Where-Object { $_ -match '<component\b' })) {
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines((Join-Path $pkg 'MANIFEST.XML'), $lines, $utf8NoBom)
+
+# INFO.XML - сведения о компоненте: по нему БСП и БПО заполняют поля
+# "Идентификатор", "Наименование" и "Версия" в карточке компоненты.
+Copy-Item -LiteralPath $info -Destination (Join-Path $pkg 'INFO.XML') -Force
+Write-Host '[+] INFO.XML'
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
