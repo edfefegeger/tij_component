@@ -72,8 +72,18 @@ std::vector<uint8_t> TIJPrinter::BuildCommand(uint8_t cmdId, const std::vector<u
     for (auto b : data) pkt.push_back(b);
     pkt.push_back(TIJ_ESC);
     pkt.push_back(TIJ_ETX);
-    std::vector<uint8_t> forCsum(pkt.begin()+2, pkt.end());
-    pkt.push_back(CalcChecksum(forCsum));
+    /*
+     * Контрольная сумма считается от ВСЕХ байтов кадра, включая начальные
+     * 1B 02 и конечные 1B 03 (раздел 2.4 протокола: "the modulo-256 sum of all
+     * the bytes in the message"). В исходной версии первые два байта не
+     * учитывались, поэтому каждый кадр уходил с неверной суммой и принтер
+     * отвечал отказом.
+     *
+     * Проверка по примеру из протокола:
+     *   1B 02 00 1D 01 01 0B 54 49 4A 20 50 72 69 6E 74 65 72 1B 03
+     *   сумма всех байтов 450h, контрольная сумма 100h - 50h = B0h.
+     */
+    pkt.push_back(CalcChecksum(pkt));
     return pkt;
 }
 
