@@ -6,6 +6,11 @@
 class IAddInDefBase
 {
 public:
+    /* В официальном заголовке деструктор объявлен первым, и это важно:
+     * порядок виртуальных методов задает смещения в таблице, по которым
+     * платформа вызывает методы. Без него все вызовы смещаются на один. */
+    virtual ~IAddInDefBase() {}
+
     virtual bool ADDIN_API AddError(unsigned short wcode, const WCHAR_T* source,
         const WCHAR_T* descr, long scode) = 0;
     virtual bool ADDIN_API Read(WCHAR_T* varName, tVariant* pVal,

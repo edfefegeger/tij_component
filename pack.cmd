@@ -2,7 +2,7 @@
 setlocal
 
 rem Упаковка DLL и MANIFEST.XML в ZIP для загрузки компоненты в конфигурацию (макет).
-rem Сначала соберите нужные разрядности: build.cmd x64 и build.cmd Win32
+rem Сначала соберите нужные разрядности: build.cmd x64 и build.cmd x86
 rem
 rem Аргументы пробрасываются в tools\pack.ps1, например:
 rem   pack.cmd

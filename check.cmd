@@ -2,10 +2,11 @@
 setlocal
 
 rem Проверка собранной DLL: разрядность, зависимости, экспортируемые функции.
-rem dumpbin входит в Visual Studio, запускать из "Developer Command Prompt for VS 2022".
+rem dumpbin входит в Visual Studio, поэтому запускать из командного окна
+rem Visual Studio ("Developer Command Prompt" или "x64 Native Tools").
 
 set DLL=%~1
-if "%DLL%"=="" set DLL=%~dp0build\x64\Release\TIJPrinter1C.dll
+if "%DLL%"=="" set DLL=%~dp0build\x64\TIJPrinter1C.dll
 
 if not exist "%DLL%" (
     echo Файл не найден: %DLL%

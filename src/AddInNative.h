@@ -37,7 +37,9 @@ public:
         tVariant* paParams, const long lSizeArray) override;
 
     void ADDIN_API SetLocale(const WCHAR_T*) override {}
-    void ADDIN_API SetUserInterfaceLanguageCode(const WCHAR_T*) override {}
+
+    /* В официальном заголовке метод возвращает код результата, 0 означает успех. */
+    long ADDIN_API SetUserInterfaceLanguageCode(const WCHAR_T*) override { return 0; }
 
 private:
     IAddInDefBase*  m_pConnect;

@@ -1,24 +1,29 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
-    Упаковка внешней компоненты в ZIP для загрузки в конфигурацию 1С (макет).
+    Packaging the external component into a ZIP for loading into 1C.
 
-    Скрипт собирает найденные варианты DLL в каталог pkg, копирует MANIFEST.XML
-    и INFO.XML и убирает из манифеста те записи component, файлов для которых
-    нет в пакете — чтобы атрибут path всегда соответствовал содержимому архива.
+    The script collects built DLLs into the "pkg" folder, copies MANIFEST.XML
+    and INFO.XML there, drops manifest entries whose file is missing from the
+    package, and packs everything into TIJPrinter1C.zip. Files are placed in the
+    archive root, as required for loading into a configuration.
 
-    Примеры:
+    NOTE: this file intentionally contains ASCII characters only.
+    Windows PowerShell 5.1 reads a .ps1 file without a BOM using the ANSI code
+    page, so non-ASCII text can break script parsing on non-English Windows.
+
+    Usage:
         powershell -File tools\pack.ps1
         powershell -File tools\pack.ps1 -MinGW64 build\mingw\TIJPrinter1C.dll
 #>
 [CmdletBinding()]
 param(
-    # Корень проекта. По умолчанию — каталог уровнем выше tools.
+    # Project root. Defaults to the folder one level above tools.
     [string]$Root = (Split-Path -Parent $PSScriptRoot),
 
-    # Путь к 64-разрядной сборке MinGW (если собирали ей).
+    # Path to a 64-bit MinGW build, if it was built.
     [string]$MinGW64,
 
-    # Путь к 32-разрядной сборке MinGW (если собирали ей).
+    # Path to a 32-bit MinGW build, if it was built.
     [string]$MinGW32
 )
 
@@ -30,15 +35,19 @@ $zip      = Join-Path $root 'TIJPrinter1C.zip'
 $manifest = Join-Path $root 'MANIFEST.XML'
 $info     = Join-Path $root 'INFO.XML'
 
-if (-not (Test-Path $manifest)) { throw "Не найден MANIFEST.XML: $manifest" }
-if (-not (Test-Path $info))     { throw "Не найден INFO.XML: $info" }
+if (-not (Test-Path $manifest)) { throw "MANIFEST.XML not found: $manifest" }
+if (-not (Test-Path $info))     { throw "INFO.XML not found: $info" }
 
 if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
 New-Item -ItemType Directory -Path $pkg | Out-Null
 
+# build.cmd puts results in build\<arch>\.
+# A CMake build with the Visual Studio generator adds a Release subfolder.
 $candidates = @(
-    @{ Src = (Join-Path $root 'build\x64\Release\TIJPrinter1C.dll');   Name = 'TIJPrinter1C_x64.dll' },
-    @{ Src = (Join-Path $root 'build\Win32\Release\TIJPrinter1C.dll'); Name = 'TIJPrinter1C_x86.dll' }
+    @{ Src = (Join-Path $root 'build\x64\TIJPrinter1C.dll');         Name = 'TIJPrinter1C_x64.dll' },
+    @{ Src = (Join-Path $root 'build\x86\TIJPrinter1C.dll');         Name = 'TIJPrinter1C_x86.dll' },
+    @{ Src = (Join-Path $root 'build\x64\Release\TIJPrinter1C.dll'); Name = 'TIJPrinter1C_x64.dll' },
+    @{ Src = (Join-Path $root 'build\x86\Release\TIJPrinter1C.dll'); Name = 'TIJPrinter1C_x86.dll' }
 )
 if ($MinGW64) { $candidates += @{ Src = $MinGW64; Name = 'TIJPrinter1C_x64.dll' } }
 if ($MinGW32) { $candidates += @{ Src = $MinGW32; Name = 'TIJPrinter1C_x86.dll' } }
@@ -46,36 +55,38 @@ if ($MinGW32) { $candidates += @{ Src = $MinGW32; Name = 'TIJPrinter1C_x86.dll' 
 foreach ($c in $candidates) {
     if (Test-Path $c.Src) {
         Copy-Item -LiteralPath $c.Src -Destination (Join-Path $pkg $c.Name) -Force
-        Write-Host "[+] $($c.Name)  <=  $($c.Src)"
+        Write-Host ('[+] ' + $c.Name + '  <=  ' + $c.Src)
     } else {
-        Write-Host "[!] не найдено: $($c.Src)"
+        Write-Host ('[!] not found: ' + $c.Src)
     }
 }
 
-# Манифест: записи component без соответствующего файла в пакет не попадают.
+# Manifest: keep only component entries whose file is present in the package.
 $lines = New-Object System.Collections.Generic.List[string]
 foreach ($line in (Get-Content -LiteralPath $manifest)) {
-    if ($line -match '<component\b') {
+    if ($line -match '<component') {
         $m = [regex]::Match($line, 'path="([^"]+)"')
         if ($m.Success -and (Test-Path (Join-Path $pkg $m.Groups[1].Value))) {
             $lines.Add($line)
         } else {
-            Write-Host "[-] из манифеста исключено: $($line.Trim())"
+            Write-Host ('[-] dropped from manifest: ' + $line.Trim())
         }
     } else {
         $lines.Add($line)
     }
 }
 
-if (-not ($lines | Where-Object { $_ -match '<component\b' })) {
-    throw 'В пакете нет ни одной библиотеки — нечего упаковывать.'
+$hasComponent = $false
+foreach ($l in $lines) {
+    if ($l -match '<component') { $hasComponent = $true }
 }
+if (-not $hasComponent) { throw 'No libraries in the package, nothing to pack.' }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines((Join-Path $pkg 'MANIFEST.XML'), $lines, $utf8NoBom)
 
-# INFO.XML - сведения о компоненте: по нему БСП и БПО заполняют поля
-# "Идентификатор", "Наименование" и "Версия" в карточке компоненты.
+# INFO.XML describes the component: the BSP subsystem fills the "Identifier",
+# "Name" and "Version" fields of the component card from this file.
 Copy-Item -LiteralPath $info -Destination (Join-Path $pkg 'INFO.XML') -Force
 Write-Host '[+] INFO.XML'
 
@@ -83,7 +94,7 @@ if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
 
 Write-Host ''
-Write-Host 'Содержимое архива:'
-Get-ChildItem -LiteralPath $pkg | ForEach-Object { Write-Host ("  " + $_.Name) }
+Write-Host 'Archive contents:'
+Get-ChildItem -LiteralPath $pkg | ForEach-Object { Write-Host ('  ' + $_.Name) }
 Write-Host ''
-Write-Host "Готово: $zip"
+Write-Host ('Done: ' + $zip)

@@ -14,20 +14,6 @@ static const WCHAR_T kClassName[] = { 'T', 'I', 'J', 'P', 'r', 'i', 'n', 't', 'e
 
 static long g_lObjectCount = 0;
 
-static bool ClassNameEquals(const WCHAR_T* wsName, const WCHAR_T* wsSample)
-{
-    if (!wsName || !wsSample)
-        return false;
-
-    while (*wsName && *wsSample) {
-        if (*wsName != *wsSample)
-            return false;
-        ++wsName;
-        ++wsSample;
-    }
-    return *wsName == 0 && *wsSample == 0;
-}
-
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     (void)hModule;
@@ -54,10 +40,18 @@ __declspec(dllexport) const WCHAR_T* GetClassNames()
  */
 __declspec(dllexport) long GetClassObject(const WCHAR_T* clsName, IComponentBase** pIntf)
 {
-    if (!pIntf)
-        return 0;
+    /*
+     * Имя класса намеренно не проверяется.
+     *
+     * Платформа сама решает, какое имя сюда передать. В официальном шаблоне 1С
+     * этот параметр не анализируется: "поскольку у нас только один класс, то это
+     * имя здесь вообще не проверяется, просто создается объект через new".
+     * Строгая проверка приводит к тому, что вызов платформы отбрасывается,
+     * и при создании объекта встроенный язык сообщает "Тип не определен".
+     */
+    (void)clsName;
 
-    if (!ClassNameEquals(clsName, kClassName))
+    if (!pIntf)
         return 0;
 
     CAddInNative* pAddIn = new (std::nothrow) CAddInNative();
