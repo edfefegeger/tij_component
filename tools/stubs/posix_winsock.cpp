@@ -114,6 +114,14 @@ unsigned short htons(unsigned short value) {
     return static_cast<unsigned short>(__builtin_bswap16(value));
 }
 
+/* Аналог Windows Sleep: ожидание через nanosleep (номер вызова x86_64 = 35). */
+void Sleep(unsigned long ms) {
+    struct timespec { long tv_sec; long tv_nsec; } ts;
+    ts.tv_sec  = static_cast<long>(ms / 1000);
+    ts.tv_nsec = static_cast<long>((ms % 1000) * 1000000L);
+    syscall(35, &ts, nullptr);
+}
+
 int inet_pton(int af, const char* src, void* dst) {
     if (af != 2 || src == nullptr || dst == nullptr)
         return 0;

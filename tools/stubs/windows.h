@@ -12,4 +12,5 @@ int WideCharToMultiByte(unsigned int cp, unsigned long flags, const wchar_t* src
                         char* dst, int dstLen, const char* defChar, int* usedDefault);
 int MultiByteToWideChar(unsigned int cp, unsigned long flags, const char* src, int srcLen,
                         wchar_t* dst, int dstLen);
+void Sleep(unsigned long ms);
 #endif

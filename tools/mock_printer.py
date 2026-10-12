@@ -9,11 +9,14 @@
 
 Запуск:
     python3 tools/mock_printer.py --port 8010 [--slave 0] [--nak-status 0]
+                                  [--buffer-used 8]
 
 Параметры:
     --port        порт для прослушивания
     --nak-status  если задан, имитатор отвечает NAK с этим кодом на любую
                   команду. Применяется, чтобы проверить обработку отказа.
+    --buffer-used сколько сообщений числится в буфере. Отдаётся в ответ на
+                  команду 33 и служит для проверки ожидания свободного места.
 """
 
 import argparse
@@ -32,8 +35,8 @@ def checksum(message: bytes) -> int:
     return (0x100 - (sum(message) & 0xFF)) & 0xFF
 
 
-def build_reply(kind: int, slave: int, status: int, cmd: int) -> bytes:
-    head = bytes([ESC, kind, slave, status, cmd, ESC, ETX])
+def build_reply(kind: int, slave: int, status: int, cmd: int, extra: bytes = b"") -> bytes:
+    head = bytes([ESC, kind, slave, status, cmd]) + extra + bytes([ESC, ETX])
     return head + bytes([checksum(head)])
 
 
@@ -56,6 +59,8 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8010)
     ap.add_argument("--slave", type=int, default=0)
     ap.add_argument("--nak-status", type=int, default=None)
+    ap.add_argument("--buffer-used", type=int, default=0,
+                    help="сколько сообщений числится в буфере, ответ на команду 33")
     ap.add_argument("--once", action="store_true", help="завершиться после первого соединения")
     args = ap.parse_args()
 
@@ -100,6 +105,16 @@ def main() -> int:
                     if args.nak_status is not None:
                         conn.sendall(build_reply(NAK, slave, args.nak_status, cmd))
                         print(f"[mock] ответ NAK, C_Status={args.nak_status:02X}", flush=True)
+                    elif cmd == 0x33:
+                        # запрос числа сообщений в буфере: после команды идёт счётчик
+                        used = max(0, min(255, args.buffer_used))
+                        conn.sendall(build_reply(ACK, slave, 0x00, cmd, bytes([used])))
+                        print(f"[mock] ответ ACK на запрос буфера, в буфере {used}", flush=True)
+                    elif cmd == 0x35:
+                        mode = "отклонять" if data[5] == 0x00 else "принимать с вытеснением"
+                        conn.sendall(build_reply(ACK, slave, 0x00, cmd))
+                        print(f"[mock] ответ ACK на настройку сигналов, при переполнении: {mode}",
+                              flush=True)
                     else:
                         conn.sendall(build_reply(ACK, slave, 0x00, cmd))
                         print(f"[mock] ответ ACK, P_Status=00", flush=True)

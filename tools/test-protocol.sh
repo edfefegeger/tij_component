@@ -45,12 +45,13 @@ echo "--- что видел имитатор ---"
 cat "$OUT/mock-ack.log"
 
 echo
-echo "=== 3. Отказ принтера: имитатор отвечает NAK ==="
-python3 tools/mock_printer.py --port "$PORT" --once --nak-status 67 > "$OUT/mock-nak.log" 2>&1 &
+echo "=== 3. Отказ принтера: имитатор отвечает NAK с C_Status=08 ==="
+python3 tools/mock_printer.py --port "$PORT" --once --nak-status 8 > "$OUT/mock-nak.log" 2>&1 &
 MOCK=$!
 sleep 0.5
 set +e
-"$OUT/test_protocol" "$PORT"
+"$OUT/test_protocol" "$PORT" nak
+DRIVER_NAK=$?
 set -e
 wait $MOCK 2>/dev/null || true
 
@@ -59,9 +60,62 @@ echo "--- что видел имитатор ---"
 cat "$OUT/mock-nak.log"
 
 echo
+echo "=== 4. Пачка: очередь свободна, этикетка уходит сразу ==="
+python3 tools/mock_printer.py --port "$PORT" --once --buffer-used 0 > "$OUT/mock-batch.log" 2>&1 &
+MOCK=$!
+sleep 0.5
+set +e
+"$OUT/test_protocol" "$PORT" batch
+DRIVER_BATCH=$?
+set -e
+wait $MOCK 2>/dev/null || true
+
+echo
+echo "--- что видел имитатор ---"
+cat "$OUT/mock-batch.log"
+
+echo
+echo "=== 5. Пачка: очередь занята, компонента ждёт свободного места ==="
+python3 tools/mock_printer.py --port "$PORT" --once --buffer-used 8 > "$OUT/mock-full.log" 2>&1 &
+MOCK=$!
+sleep 0.5
+set +e
+"$OUT/test_protocol" "$PORT" full
+DRIVER_FULL=$?
+set -e
+wait $MOCK 2>/dev/null || true
+
+echo
+echo "--- что видел имитатор ---"
+cat "$OUT/mock-full.log"
+
+echo
 if [ "$DRIVER" -eq 0 ]; then
-    echo "ИТОГ: обмен в штатном режиме прошёл без ошибок"
+    echo "ИТОГ 1: обмен в штатном режиме прошёл без ошибок"
 else
-    echo "ИТОГ: в штатном режиме есть ошибки, см. вывод выше"
+    echo "ИТОГ 1: в штатном режиме есть ошибки, см. вывод выше"
 fi
-exit "$DRIVER"
+
+if [ "$DRIVER_NAK" -eq 0 ]; then
+    echo "ИТОГ 2: отказ принтера обрабатывается верно, код -2 и расшифровка C_Status"
+else
+    echo "ИТОГ 2: обработка отказа принтера расходится с ожиданием"
+fi
+
+if [ "$DRIVER_BATCH" -eq 0 ]; then
+    echo "ИТОГ 3: отправка этикетки при свободной очереди проходит"
+else
+    echo "ИТОГ 3: отправка этикетки при свободной очереди расходится с ожиданием"
+fi
+
+if [ "$DRIVER_FULL" -eq 0 ]; then
+    echo "ИТОГ 4: при занятой очереди компонента ждёт место и возвращает -4 по таймауту"
+else
+    echo "ИТОГ 4: ожидание свободного места в очереди расходится с ожиданием"
+fi
+
+if [ "$DRIVER" -ne 0 ] || [ "$DRIVER_NAK" -ne 0 ] || \
+   [ "$DRIVER_BATCH" -ne 0 ] || [ "$DRIVER_FULL" -ne 0 ]; then
+    exit 1
+fi
+exit 0

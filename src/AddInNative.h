@@ -46,6 +46,9 @@ private:
     IMemoryManager* m_pMemory;
     std::unique_ptr<TIJPrinter> m_printer;
 
+    /* Кодировка значений: TIJ_ENC_UTF8 для полей с ASCII, TIJ_ENC_UTF16LE для Unicode. */
+    long m_encoding;
+
     /*
      * Выделяет строку памятью платформы (IMemoryManager::AllocMemory) и копирует
      * в неё wstr. Освобождать память должна платформа, поэтому использовать new
@@ -62,7 +65,11 @@ private:
 
     /* Строки протокола принтера — байтовые, во встроенном языке — UTF-16. */
     static std::string  ToUtf8(const std::wstring& w);
+    static std::string  ToUtf16Le(const std::wstring& w);
     static std::wstring FromUtf8(const std::string& s);
+
+    /* Кодировка значения зависит от того, какой кодировщик выбран у поля на принтере. */
+    std::string EncodeValue(const std::wstring& w) const;
 
     enum eMethods {
         eConnect = 0,
@@ -73,6 +80,14 @@ private:
         eSendField,
         eGetLastError,
         eIsConnected,
+        eAddField,
+        eSendPackage,
+        eBeginPackage,
+        eDescribeCode,
+        eSetEncoding,
+        eGetBufferUsed,
+        eSendLabel,
+        eSetRejectOnBufferFull,
         eMethLast
     };
 };

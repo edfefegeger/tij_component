@@ -18,13 +18,23 @@ static const wchar_t* g_MethodNames[][2] = {
     { L"ClearBuffer",  L"ОчиститьБуфер"    },
     { L"SendField",    L"ОтправитьПоле"    },
     { L"GetLastError", L"ПолучитьОшибку"   },
-    { L"IsConnected",  L"ЕстьПодключение"  }
+    { L"IsConnected",  L"ЕстьПодключение"  },
+    { L"AddField",     L"ДобавитьПоле"     },
+    { L"SendPackage",  L"ОтправитьПоля"    },
+    { L"BeginPackage", L"НачатьПакет"      },
+    { L"DescribeCode", L"ОписаниеКода"     },
+    { L"SetEncoding",  L"УстановитьКодировку" },
+    { L"GetBufferUsed", L"ЗанятоВБуфере"   },
+    { L"SendLabel",    L"ОтправитьЭтикетку" },
+    { L"SetRejectOnBufferFull", L"УстановитьОтказПриПереполнении" }
 };
 
-static const long g_MethodParams[]    = { 2, 0, 0, 0, 0, 2, 0, 0 };
-static const bool g_MethodHasRetVal[] = { true, true, true, true, true, true, true, true };
+static const long g_MethodParams[]    = { 2, 0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 1, 1, 0, 2, 1 };
+static const bool g_MethodHasRetVal[] = { true, true, true, true, true, true, true, true,
+                                          true, true, true, true, true, true, true, true };
 
-CAddInNative::CAddInNative() : m_pConnect(nullptr), m_pMemory(nullptr)
+CAddInNative::CAddInNative()
+    : m_pConnect(nullptr), m_pMemory(nullptr), m_encoding(TIJ_ENC_UTF8)
 {
     try {
         m_printer = std::make_unique<TIJPrinter>();
@@ -208,6 +218,28 @@ std::string CAddInNative::ToUtf8(const std::wstring& w)
     return out;
 }
 
+/*
+ * Поля с кодировщиком Unicode ждут двухбайтовые символы, младшим байтом вперёд.
+ * В Windows wchar_t это уже 16 бит, поэтому перекодировка сводится к разложению
+ * каждого символа на два байта.
+ */
+std::string CAddInNative::ToUtf16Le(const std::wstring& w)
+{
+    std::string out;
+    out.reserve(w.size() * 2);
+    for (size_t i = 0; i < w.size(); ++i) {
+        const uint16_t u = static_cast<uint16_t>(w[i]);
+        out.push_back(static_cast<char>(u & 0xFF));
+        out.push_back(static_cast<char>((u >> 8) & 0xFF));
+    }
+    return out;
+}
+
+std::string CAddInNative::EncodeValue(const std::wstring& w) const
+{
+    return (m_encoding == TIJ_ENC_UTF16LE) ? ToUtf16Le(w) : ToUtf8(w);
+}
+
 std::wstring CAddInNative::FromUtf8(const std::string& s)
 {
     if (s.empty())
@@ -286,14 +318,10 @@ bool ADDIN_API CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRet
         if (lSizeArray < 2)
             return false;
 
-        const long rawId = GetInt(&paParams[0]);
-        if (rawId < 0 || rawId > 255)          /* номер поля передаётся одним байтом */
-            return false;
+        const long num = GetInt(&paParams[0]);
+        const std::string val = EncodeValue(GetWString(&paParams[1]));
 
-        const uint8_t id = static_cast<uint8_t>(rawId);
-        const std::string val = ToUtf8(GetWString(&paParams[1]));
-
-        pvarRetValue->val_i32 = m_printer->SendField(id, val);
+        pvarRetValue->val_i32 = m_printer->SendField(num, val);
         pvarRetValue->vt      = VTYPE_I4;
         return true;
     }
@@ -303,6 +331,77 @@ bool ADDIN_API CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRet
     case eIsConnected: {
         pvarRetValue->val_bool = m_printer->IsConnected();
         pvarRetValue->vt       = VTYPE_BOOL;
+        return true;
+    }
+    case eAddField: {
+        if (lSizeArray < 2)
+            return false;
+
+        const long num = GetInt(&paParams[0]);
+        const std::string val = EncodeValue(GetWString(&paParams[1]));
+
+        pvarRetValue->val_i32 = m_printer->AddField(num, val);
+        pvarRetValue->vt      = VTYPE_I4;
+        return true;
+    }
+    case eSendPackage: {
+        pvarRetValue->val_i32 = m_printer->SendPackage();
+        pvarRetValue->vt      = VTYPE_I4;
+        return true;
+    }
+    case eBeginPackage: {
+        m_printer->BeginPackage();
+        pvarRetValue->val_bool = true;
+        pvarRetValue->vt       = VTYPE_BOOL;
+        return true;
+    }
+    case eDescribeCode: {
+        if (lSizeArray < 1)
+            return false;
+
+        const long code = GetInt(&paParams[0]);
+        return SetWString(pvarRetValue, FromUtf8(m_printer->DescribeCode((int)code)));
+    }
+    case eSetEncoding: {
+        if (lSizeArray < 1)
+            return false;
+
+        const long enc = GetInt(&paParams[0]);
+        if (enc != TIJ_ENC_UTF8 && enc != TIJ_ENC_UTF16LE) {
+            pvarRetValue->val_bool = false;
+            pvarRetValue->vt       = VTYPE_BOOL;
+            return true;
+        }
+
+        m_encoding = enc;
+        pvarRetValue->val_bool = true;
+        pvarRetValue->vt       = VTYPE_BOOL;
+        return true;
+    }
+    case eGetBufferUsed: {
+        pvarRetValue->val_i32 = m_printer->RequestBufferCount();
+        pvarRetValue->vt      = VTYPE_I4;
+        return true;
+    }
+    case eSendLabel: {
+        if (lSizeArray < 2)
+            return false;
+
+        const long depth   = GetInt(&paParams[0]);
+        const long timeout = GetInt(&paParams[1]);
+
+        pvarRetValue->val_i32 = m_printer->SendLabel(depth, timeout);
+        pvarRetValue->vt      = VTYPE_I4;
+        return true;
+    }
+    case eSetRejectOnBufferFull: {
+        if (lSizeArray < 1)
+            return false;
+
+        const bool reject = (GetInt(&paParams[0]) != 0);
+
+        pvarRetValue->val_i32 = m_printer->SetRejectOnBufferFull(reject);
+        pvarRetValue->vt      = VTYPE_I4;
         return true;
     }
     }

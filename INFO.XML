@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
+This XML file does not appear to have any style information associated with it. The document tree is shown below.
+<!-- 
   INFO.XML — сведения о компоненте для автозаполнения служебных полей.
 
   Файл читают:
@@ -23,10 +23,7 @@
   Значение progid менять нельзя: оно привязано к имени, которое компонента
   регистрирует во встроенном языке (RegisterExtensionAs / GetClassNames
   возвращают "TIJPrinter", поэтому progid = AddIn.TIJPrinter).
--->
+ -->
 <drivers>
-  <component progid="AddIn.TIJPrinter"
-             type="LabelPrinter"
-             name="Принтер линии TIJ"
-             version="1.0.0.0"/>
+<component progid="AddIn.TIJPrinter" type="LabelPrinter" name="Принтер линии TIJ" version="1.2.0.0"/>
 </drivers>
