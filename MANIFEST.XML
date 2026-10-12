@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
+This XML file does not appear to have any style information associated with it. The document tree is shown below.
+<!-- 
   Манифест внешней компоненты для загрузки в конфигурацию.
 
   Требования:
@@ -13,8 +13,7 @@
   Если вариант под 32-битную платформу не собирается, вторую строку component
   можно не удалять вручную: tools/pack.ps1 сам исключает из манифеста записи,
   для которых в архиве нет соответствующего файла.
--->
+ -->
 <bundle xmlns="http://v8.1c.ru/8.2/addin/bundle">
-  <component os="Windows" path="TIJPrinter1C_x64.dll" type="native" arch="x86_64"/>
-  <component os="Windows" path="TIJPrinter1C_x86.dll" type="native" arch="i386"/>
+<component os="Windows" path="TIJPrinter1C_x64.dll" type="native" arch="x86_64"/>
 </bundle>
